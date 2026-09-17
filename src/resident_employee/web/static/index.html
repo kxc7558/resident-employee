@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>数字员工</title>
+<style>
+  :root {
+    --bg: #f7f8fa; --panel: #fff; --ink: #1c1f23; --muted: #6b7280;
+    --line: #e5e7eb; --brand: #2f6feb; --brand-ink: #fff;
+    --ok: #15803d; --warn: #b45309; --danger: #b91c1c;
+    --code-bg: #f3f4f6; --step-bg: #f9fafb;
+  }
+  html[data-theme="dark"] {
+    --bg: #14161a; --panel: #1c1f24; --ink: #e6e8eb; --muted: #9aa2ad;
+    --line: #2b2f36; --brand: #4c8dff; --brand-ink: #0b0d10;
+    --ok: #4ade80; --warn: #fbbf24; --danger: #f87171;
+    --code-bg: #23272e; --step-bg: #21252b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; height: 100vh; display: flex; flex-direction: column;
+    background: var(--bg); color: var(--ink);
+    font: 14px/1.65 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line);
+           background: var(--panel); color: var(--ink); padding: 6px 12px; }
+  button:hover { border-color: var(--brand); }
+  button.primary { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+  button.danger:hover { border-color: var(--danger); color: var(--danger); }
+  button:disabled { opacity: .5; cursor: default; }
+
+  header { display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+           background: var(--panel); border-bottom: 1px solid var(--line); }
+  header .name { font-weight: 700; }
+  header .spacer { flex: 1; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--ok); } .dot.bad { background: var(--danger); }
+  .muted { color: var(--muted); font-size: 12px; }
+
+  main { flex: 1; display: flex; min-height: 0; }
+  aside { width: 240px; border-right: 1px solid var(--line); background: var(--panel);
+          display: flex; flex-direction: column; min-height: 0; }
+  aside .top { padding: 10px; border-bottom: 1px solid var(--line); }
+  aside .list { overflow-y: auto; flex: 1; padding: 6px; }
+  .sess { padding: 8px 10px; border-radius: 8px; cursor: pointer; display: flex;
+          align-items: center; gap: 6px; margin-bottom: 2px; }
+  .sess:hover { background: var(--bg); }
+  .sess.active { background: var(--bg); border-left: 3px solid var(--brand); }
+  .sess .t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sess .x { opacity: 0; color: var(--muted); padding: 0 4px; }
+  .sess:hover .x { opacity: 1; }
+
+  section.chat { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .feed { flex: 1; overflow-y: auto; padding: 18px 22px; }
+  .msg { max-width: 860px; margin: 0 auto 16px; }
+  .msg .who { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .bubble { padding: 10px 14px; border-radius: 12px; background: var(--panel);
+            border: 1px solid var(--line); overflow-wrap: anywhere; }
+  .msg.user .bubble { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+
+  .steps { margin: 6px 0 0; border: 1px dashed var(--line); border-radius: 10px;
+           background: var(--step-bg); padding: 8px 10px; font-size: 13px; }
+  .steps summary { cursor: pointer; color: var(--muted); }
+  .step { padding: 2px 0; display: flex; gap: 6px; align-items: baseline; }
+  .step .k { flex: none; }
+  .step code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px;
+               font-size: 12px; overflow-wrap: anywhere; }
+  .step.denied { color: var(--warn); }
+
+  .approve { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--warn);
+             border-radius: 10px; background: var(--step-bg); }
+  .approve .h { color: var(--warn); font-weight: 600; margin-bottom: 6px; }
+
+  .composer { border-top: 1px solid var(--line); background: var(--panel); padding: 12px 22px; }
+  .composer .row { max-width: 860px; margin: 0 auto; display: flex; gap: 8px; }
+  textarea { flex: 1; resize: none; height: 56px; padding: 10px 12px; border-radius: 10px;
+             border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+             font: inherit; }
+  textarea:focus { outline: 2px solid var(--brand); outline-offset: -1px; }
+
+  dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+           color: var(--ink); width: min(560px, 92vw); padding: 0; }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  dialog .dh { padding: 14px 18px; border-bottom: 1px solid var(--line); font-weight: 700; }
+  dialog .db { padding: 14px 18px; display: grid; gap: 12px; }
+  dialog .df { padding: 14px 18px; border-top: 1px solid var(--line); display: flex;
+               justify-content: flex-end; gap: 8px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  input[type=text], input[type=password], input[type=number] {
+    width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--ink); font: inherit; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  .md h1, .md h2, .md h3 { margin: 12px 0 6px; line-height: 1.3; }
+  .md p { margin: 8px 0; }
+  .md ul, .md ol { margin: 6px 0 6px 20px; padding: 0; }
+  .md code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  .md pre { background: var(--code-bg); padding: 10px 12px; border-radius: 8px; overflow-x: auto; }
+  .md pre code { background: none; padding: 0; }
+  .md table { border-collapse: collapse; margin: 8px 0; }
+  .md th, .md td { border: 1px solid var(--line); padding: 4px 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="name" id="empName">数字员工</span>
+  <span class="dot" id="health"></span>
+  <span class="muted" id="healthText">连接中…</span>
+  <span class="spacer"></span>
+  <button id="btnTheme" title="切换深色/浅色">◐</button>
+  <button id="btnConfig">配置</button>
+</header>
+
+<main>
+  <aside>
+    <div class="top"><button class="primary" id="btnNew" style="width:100%">＋ 新会话</button></div>
+    <div class="list" id="sessList"></div>
+  </aside>
+  <section class="chat">
+    <div class="feed" id="feed"></div>
+    <div class="composer">
+      <div class="row">
+        <textarea id="prompt" placeholder="跟员工说话…（Enter 发送，Shift+Enter 换行）"></textarea>
+        <button class="primary" id="btnSend">发送</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <span class="muted" id="note">过程可见：它跑了什么、被拦了什么，都会显示在回复上方。</span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<dialog id="cfgDlg">
+  <form method="dialog">
+    <div class="dh">配置（改完不用改文件）</div>
+    <div class="db">
+      <div>
+        <label>员工定义（六段式 JSON）</label>
+        <input type="text" id="cfgEmployee">
+      </div>
+      <div>
+        <label>模型后端地址（base_url）</label>
+        <input type="text" id="cfgBase" placeholder="留空 = 用 ~/.claude/settings.json">
+      </div>
+      <div>
+        <label>访问令牌（留空 = 不改，只显示有没有配）</label>
+        <input type="password" id="cfgToken" placeholder="●●●●（不会回显）">
+        <div class="hint" id="tokenHint"></div>
+      </div>
+      <div>
+        <label>模型名（留空 = 用后端默认）</label>
+        <input type="text" id="cfgModel">
+      </div>
+      <div>
+        <label>工具面（逗号分隔——只发它该有的那几把）</label>
+        <input type="text" id="cfgTools">
+      </div>
+      <div>
+        <label>单轮步数上限</label>
+        <input type="number" id="cfgSteps" min="1" max="200">
+      </div>
+    </div>
+    <div class="df">
+      <button value="cancel">取消</button>
+      <button class="primary" value="ok" id="cfgSave">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+'use strict';
+
+/* ---------- 基础 ---------- */
+
+const $ = (id) => document.getElementById(id);
+
+/** HTML 转义。**模型输出会进 innerHTML，这一步不能省**——否则就是 XSS。 */
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.ok === false) throw new Error(data.error || ('HTTP ' + res.status));
+  return data.data;
+}
+
+/* ---------- 极简 Markdown 渲染 ----------
+   先整段转义再做替换：反过来做的话，模型输出里的 <script> 就进去了。 */
+
+function md(text) {
+  const lines = esc(text || '').split(/\r?\n/);
+  const out = [];
+  let inList = false, inCode = false, inTable = false;
+
+  const inline = (s) => s
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+  const closeList = () => { if (inList) { out.push('</ul>'); inList = false; } };
+  const closeTable = () => { if (inTable) { out.push('</tbody></table>'); inTable = false; } };
+
+  for (const raw of lines) {
+    const line = raw.replace(/\s+$/, '');
+    if (/^```/.test(line)) {
+      closeList(); closeTable();
+      out.push(inCode ? '</code></pre>' : '<pre><code>');
+      inCode = !inCode;
+      continue;
+    }
+    if (inCode) { out.push(line); continue; }
+    if (!line.trim()) { closeList(); closeTable(); out.push('<p></p>'); continue; }
+
+    if (/^\|.*\|$/.test(line.trim())) {
+      const cells = line.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+      if (cells.every((c) => /^:?-{2,}:?$/.test(c))) continue;
+      if (!inTable) {
+        closeList();
+        out.push('<table><tbody>');
+        inTable = true;
+      }
+      out.push('<tr>' + cells.map((c) => '<td>' + inline(c) + '</td>').join('') + '</tr>');
+      continue;
+    }
+    closeTable();
+
+    const h = /^(#{1,6})\s+(.*)$/.exec(line);
+    if (h) { closeList(); out.push('<h' + h[1].length + '>' + inline(h[2]) + '</h' + h[1].length + '>'); continue; }
+
+    if (/^[-*]\s+/.test(line)) {
+      if (!inList) { out.push('<ul>'); inList = true; }
+      out.push('<li>' + inline(line.replace(/^[-*]\s+/, '')) + '</li>');
+      continue;
+    }
+    closeList();
+    out.push('<p>' + inline(line) + '</p>');
+  }
+  closeList(); closeTable();
+  if (inCode) out.push('</code></pre>');
+  return out.join('\n');
+}
+
+/* ---------- 过程可见的渲染 ---------- */
+
+function stepHtml(step) {
+  if (step.kind === 'tool') {
+    return '<div class="step"><span class="k">🔧</span><span>调用 <code>' + esc(step.tool) +
+           '</code> ' + esc(JSON.stringify(step.args || {})) + '</span></div>';
+  }
+  if (step.kind === 'denied') {
+    return '<div class="step denied"><span class="k">⛔</span><span>被拦（' + esc(step.gate || '') +
+           '）：' + esc(step.reason || '') + '</span></div>';
+  }
+  return '';
+}
+
+function stepsHtml(steps) {
+  const visible = (steps || []).filter((s) => s.kind === 'tool' || s.kind === 'denied');
+  if (!visible.length) return '';
+  const denied = visible.filter((s) => s.kind === 'denied').length;
+  return '<details class="steps"' + (denied ? ' open' : '') + '><summary>过程：' +
+         visible.length + ' 步' + (denied ? '（被拦 ' + denied + '）' : '') + '</summary>' +
+         visible.map(stepHtml).join('') + '</details>';
+}
+
+/* ---------- 状态 ---------- */
+
+const state = { session: '', sessions: [], busy: false };
+
+function setHealth(ok, text) {
+  $('health').className = 'dot ' + (ok ? 'ok' : 'bad');
+  $('healthText').textContent = text;
+}
+
+async function refreshStatus() {
+  try {
+    const s = await api('/api/status');
+    $('empName').textContent = s.employee || '（未配置员工）';
+    setHealth(s.chain_ok && s.engine === '已装',
+      '审计链' + (s.chain_ok ? '完整' : '已断') + ' · 引擎' + s.engine +
+      (s.employee ? '' : ' · 员工定义缺失'));
+  } catch (e) {
+    setHealth(false, '连不上服务：' + e.message);
+  }
+}
+
+async function refreshSessions() {
+  state.sessions = await api('/api/sessions');
+  const box = $('sessList');
+  box.innerHTML = '';
+  if (!state.sessions.length) { box.innerHTML = '<div class="muted" style="padding:8px">还没有会话</div>'; return; }
+  for (const s of state.sessions) {
+    const el = document.createElement('div');
+    el.className = 'sess' + (s.session_id === state.session ? ' active' : '');
+    el.innerHTML = '<span class="t">' + esc(s.title) + '</span>' +
+                   '<span class="x" title="删除">✕</span>';
+    el.onclick = (ev) => {
+      if (ev.target.classList.contains('x')) {
+        if (confirm('删掉「' + s.title + '」？')) {
+          api('/api/sessions/' + s.session_id, { method: 'DELETE' })
+            .then(() => { if (state.session === s.session_id) state.session = ''; return refreshAll(); });
+        }
+        return;
+      }
+      openSession(s.session_id);
+    };
+    box.appendChild(el);
+  }
+}
+
+/* ---------- 消息渲染 ---------- */
+
+function bubble(role, text, steps) {
+  const el = document.createElement('div');
+  el.className = 'msg ' + (role === 'user' ? 'user' : 'emp');
+  const who = role === 'user' ? '你' : ($('empName').textContent || '员工');
+  el.innerHTML = '<div class="who">' + esc(who) + '</div>' +
+    (role === 'user' ? '<div class="bubble">' + esc(text) + '</div>'
+                     : stepsHtml(steps) + '<div class="bubble md">' + md(text) + '</div>');
+  return el;
+}
+
+const APPROVAL_GATE = '授权';
+
+/** 从过程记录里挑出「确认执行能解决」的动作——判据：授权闸门拦的。 */
+function confirmable(steps) {
+  return [...new Set((steps || [])
+    .filter((s) => s.kind === 'denied' && s.gate === APPROVAL_GATE)
+    .map((s) => s.tool).filter(Boolean))].sort();
+}
+
+/** 被结构性闸门拦下的——批准也没用，要改配置。 */
+function hardBlocked(steps) {
+  return [...new Set((steps || [])
+    .filter((s) => s.kind === 'denied' && s.gate !== APPROVAL_GATE)
+    .map((s) => s.tool).filter(Boolean))].sort();
+}
+
+function codes(list) {
+  return list.map((a) => '<code>' + esc(a) + '</code>').join(' ');
+}
+
+function approveBox(approvable, blockedHard) {
+  const el = document.createElement('div');
+  el.className = 'approve';
+
+  let html = '';
+  if (approvable.length) {
+    html += '<div class="h">⚠️ 需要你确认</div>' +
+      '<div>它想做这些<b>没被授权</b>的动作：' + codes(approvable) + '</div>' +
+      '<div class="hint">点「确认执行」= 签一张<b>一次性授权</b>，只覆盖这些动作，用一次即废。</div>';
+  }
+  if (blockedHard.length) {
+    html += '<div class="h" style="color:var(--danger)">⛔ 这几个批准也没用</div>' +
+      '<div>' + codes(blockedHard) + ' 不在它的工具面里，或触发了循环检测——' +
+      '<b>这是设定好的边界，不是缺授权</b>。要放开得改配置里的工具面。</div>';
+  }
+  el.innerHTML = html;
+
+  if (approvable.length) {
+    const btn = document.createElement('button');
+    btn.className = 'primary';
+    btn.textContent = '确认执行';
+    btn.style.marginTop = '8px';
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try {
+        for (const action of approvable) {
+          await api('/api/approve', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session: state.session, action: action }),
+          });
+        }
+        btn.textContent = '已授权，重跑中…';
+        if (state.lastPrompt) send(state.lastPrompt);
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = '确认执行（失败：' + e.message + '）';
+      }
+    };
+    el.appendChild(btn);
+  }
+  return el;
+}
+
+/* ---------- 会话 ---------- */
+
+async function openSession(id) {
+  state.session = id;
+  await refreshSessions();
+  const data = await api('/api/sessions/' + id);
+  const feed = $('feed');
+  feed.innerHTML = '';
+  const msgs = data.messages || [];
+  for (const m of msgs) feed.appendChild(bubble(m.role, m.text, m.steps));
+
+  // 可确认的动作从**记录**里推，不从内存里取——刷新后按钮还在。
+  const last = msgs.length ? msgs[msgs.length - 1] : null;
+  if (last && last.role === 'employee') {
+    const need = confirmable(last.steps);
+    const hard = hardBlocked(last.steps);
+    if (need.length || hard.length) {
+      state.lastPrompt = (msgs.filter((m) => m.role === 'user').pop() || {}).text || '';
+      feed.appendChild(approveBox(need, hard));
+    }
+  }
+  feed.scrollTop = feed.scrollHeight;
+}
+
+async function newSession() {
+  const s = await api('/api/sessions', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  });
+  state.session = s.session_id;
+  await refreshSessions();
+  $('feed').innerHTML = '';
+  $('prompt').focus();
+}
+
+/* ---------- 发送（流式） ---------- */
+
+async function send(text) {
+  if (state.busy) return;
+  const prompt = (text == null ? $('prompt').value : text).trim();
+  if (!prompt) return;
+
+  if (!state.session) await newSession();
+  state.lastPrompt = prompt;
+  state.busy = true;
+  $('btnSend').disabled = true;
+  $('prompt').value = '';
+
+  const feed = $('feed');
+  feed.appendChild(bubble('user', prompt));
+  const holder = bubble('employee', '');
+  const steps = [];
+  const anchor = document.createElement('div');
+  holder.insertBefore(anchor, holder.querySelector('.bubble'));
+  feed.appendChild(holder);
+  feed.scrollTop = feed.scrollHeight;
+
+  const paint = () => {
+    const html = stepsHtml(steps);
+    anchor.innerHTML = html;
+    feed.scrollTop = feed.scrollHeight;
+  };
+
+  try {
+    const res = await fetch('/api/ask', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session: state.session, prompt: prompt }),
+    });
+    if (!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    let acc = '';
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, idx).trim();
+        buf = buf.slice(idx + 1);
+        if (!line) continue;
+        let ev;
+        try { ev = JSON.parse(line); } catch (e) { continue; }
+
+        if (ev.type === 'tool') { steps.push({ kind: 'tool', tool: ev.tool, args: ev.args }); paint(); }
+        else if (ev.type === 'denied') { steps.push({ kind: 'denied', reason: ev.reason, gate: ev.gate }); paint(); }
+        else if (ev.type === 'text') { acc += ev.text; holder.querySelector('.bubble').innerHTML = md(acc); feed.scrollTop = feed.scrollHeight; }
+        else if (ev.type === 'thinking') { /* 思考默认不展示，避免噪音 */ }
+        else if (ev.type === 'result') {
+          holder.querySelector('.bubble').innerHTML = md(ev.text || acc);
+          holder.querySelector('.who').textContent =
+            ($('empName').textContent || '员工') + ' · ' + ev.brief;
+          const need = ev.needs_approval || [];
+          const hard = ev.blocked_hard || [];
+          if (need.length || hard.length) holder.appendChild(approveBox(need, hard));
+        }
+        else if (ev.type === 'error') {
+          holder.querySelector('.bubble').innerHTML =
+            '<span style="color:var(--danger)">出错：' + esc(ev.text) + '</span>';
+        }
+      }
+    }
+  } catch (e) {
+    holder.querySelector('.bubble').innerHTML =
+      '<span style="color:var(--danger)">连不上服务：' + esc(e.message) + '</span>';
+  } finally {
+    state.busy = false;
+    $('btnSend').disabled = false;
+    $('prompt').focus();
+    refreshSessions();
+    refreshStatus();
+  }
+}
+
+/* ---------- 配置 ---------- */
+
+async function openConfig() {
+  const c = await api('/api/config');
+  $('cfgEmployee').value = c.employee_file || '';
+  $('cfgBase').value = c.base_url || '';
+  $('cfgModel').value = c.model || '';
+  $('cfgTools').value = (c.allowed_tools || []).join(', ');
+  $('cfgSteps').value = c.max_steps || 20;
+  $('cfgToken').value = '';
+  $('tokenHint').textContent = c.has_token
+    ? '已配置令牌（留空则不改）'
+    : '还没有令牌。留空则用 ~/.claude/settings.json 里那份。';
+  $('cfgDlg').showModal();
+}
+
+async function saveConfig() {
+  const body = {
+    employee_file: $('cfgEmployee').value.trim(),
+    base_url: $('cfgBase').value.trim(),
+    model: $('cfgModel').value.trim(),
+    allowed_tools: $('cfgTools').value.split(',').map((s) => s.trim()).filter(Boolean),
+    max_steps: parseInt($('cfgSteps').value, 10) || 20,
+  };
+  const token = $('cfgToken').value;
+  if (token) body.token = token;
+  await api('/api/config', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  refreshStatus();
+}
+
+/* ---------- 主题 ---------- */
+
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem('re-theme', t);
+}
+
+/* ---------- 装配 ---------- */
+
+async function refreshAll() { await refreshSessions(); await refreshStatus(); }
+
+$('btnNew').onclick = newSession;
+$('btnSend').onclick = () => send();
+$('btnConfig').onclick = openConfig;
+$('cfgSave').onclick = () => { saveConfig(); };
+$('btnTheme').onclick = () =>
+  applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+$('prompt').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
+
+applyTheme(localStorage.getItem('re-theme') || 'light');
+refreshAll().then(() => {
+  if (state.sessions.length) openSession(state.sessions[0].session_id);
+  else $('prompt').focus();
+});
+</script>
+</body>
+</html>

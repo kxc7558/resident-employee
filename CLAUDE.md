@@ -25,13 +25,19 @@ src/resident_employee/
 │   ├── cli_base.py      CLI 公共设施（退出码/路径/备份/输出）
 │   └── cli.py           人类侧命令行（分级授权由代码强制）
 └── runtime/             常驻运行时（把员工跑起来）
-    ├── ports.py         与引擎的接口（**核心不认识任何 SDK**）
-    ├── employee.py      员工定义（六段式）→ 系统提示
-    ├── gates.py         每次工具调用前的闸门
-    ├── runner.py        主循环 + 整轮闸门 + 审计
-    └── adapters/        具体引擎（唯一 import SDK 的地方）
-tests/          147 用例，覆盖率 94%
-examples/       demo.py（库，纯本地）/ demo_employee.py（运行时，--fake 可离线跑）
+│   ├── ports.py         与引擎的接口（**核心不认识任何 SDK**）
+│   ├── employee.py      员工定义（六段式）→ 系统提示
+│   ├── gates.py         每次工具调用前的闸门
+│   ├── runner.py        主循环 + 整轮闸门 + 审计
+│   └── adapters/        具体引擎（唯一 import SDK 的地方）
+└── web/                 网页前台（把员工摆到人面前）
+    ├── sessions.py      多会话 + 消息 + 过程记录（落 JSON）
+    ├── approvals.py     审批簿：确认执行 = 签一张一次性授权
+    ├── server.py        HTTP API + NDJSON 流式（**只用标准库**）
+    ├── __main__.py      启动入口（含 --trial-engine 试用引擎）
+    └── static/index.html  单文件前台（内联 CSS/JS，零外部依赖）
+tests/          181 用例，覆盖率 90%+
+examples/       demo.py（库）/ demo_employee.py（运行时）/ employee.example.json（六段实写）
 verify_sdk.py   引擎可行性实测（两关，看最后一行）
 ```
 
@@ -47,6 +53,13 @@ verify_sdk.py   引擎可行性实测（两关，看最后一行）
    不是模型说的话——当过 text 事件吐出去，结果被拼进了给用户看的回复正文里。
 8. **运行时核心（除 `adapters/`）不许 import 任何 SDK**。一 import 就没法脱离"真起一个 agent 进程"来测，
    每次跑测试都要花钱、起进程、依赖网络。
+9. **前端改动必须真实浏览器实测**，不能只看代码推断。前台有 `--trial-engine`——不装模型就能把
+   整条链路走一遍（过程可见、被拦、确认执行），**没有理由跳过实测**。
+10. **"被拦"要分清两类**：缺授权（批准能解决）vs 不在工具面/循环检测（批准没用）。
+    给用户一个点了没用的按钮比不给更糟。见 `web/approvals.py`。
+11. **令牌绝不回传前台**。`GET /api/config` 只说 `has_token`，不说是多少——它会进浏览器、进缓存、进截图。
+12. **批准只认记录里真的被拦过的动作**。不能"客户端说批什么就批什么"，否则任何本机页面
+    都能给自己签一个从没被拦过的动作。
 
 ## 关键坑（都真踩过 / 已用测试固化）
 
@@ -81,10 +94,11 @@ cd d:/resident-employee && python verify_sdk.py
 
 ## 已知缺口
 
-- [ ] 网页前台（事件流已备好，接上即可；"签授权书"与"点确认执行"是同一个动作，见规范）
 - [ ] 常驻进程的托管（开机自启 / systemd / 失联上报——目前只有库，没有守护进程）
+- [ ] 前台要对外必须加认证（现在默认只绑 127.0.0.1，没有登录态）
 - [ ] 员工定义支持 markdown（现在只吃 JSON；规范里的 `.claude/agents/*.md` 六段格式要能直接读）
 - [ ] 授权档案的 SQLite 后端（当前 JSON，量大后要换）
+- [ ] 附件上传、历史搜索（规范里列了，还没做）
 - [ ] **三件套缺 agent 定义与手册**——按 `digital-employee.md`，交付一个系统要配
       「数字员工 agent + 操作 CLI + 手册」。CLI（`cli.py`）已就位，agent 定义未写
 - [ ] 英文 README
