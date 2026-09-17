@@ -11,6 +11,9 @@ requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = []
 
+[project.scripts]
+resident-authz = "resident_employee.authz.cli:main"
+
 [project.optional-dependencies]
 # ② 档（一次性授权码 + 审计哈希链）零依赖；③ 档签名才需要密码学库
 signed = ["cryptography>=41"]

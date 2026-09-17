@@ -20,8 +20,9 @@ src/resident_employee/authz/
 ├── audit.py    审计哈希链（JSONL 追加，改一条后面全对不上）
 ├── store.py    授权档案（签发/撤销/消费；只存码的哈希）
 ├── verify.py   ② 档校验流程（先认证后授权，七道检查）
-└── signed.py   ③ 档签名令牌（Ed25519，人类持私钥）
-tests/          46 用例，覆盖率 93%
+├── signed.py   ③ 档签名令牌（Ed25519，人类持私钥）
+└── cli.py      人类侧命令行（分级授权由代码强制）
+tests/          60 用例，覆盖率 93%
 examples/       可跑的 demo（含篡改检测）
 verify_sdk.py   常驻运行时的可行性实测（见文末）
 ```
@@ -70,8 +71,9 @@ cd d:/resident-employee && python verify_sdk.py
 
 - [ ] 常驻员工运行时（等 `verify_sdk.py` 的结果）
 - [ ] 网页前台（"签授权书"与"点确认执行"是同一个动作，见规范）
-- [ ] ② 档的 CLI（人类侧签发/撤销的命令行工具）
 - [ ] 授权档案的 SQLite 后端（当前 JSON，量大后要换）
+- [ ] **三件套缺 agent 定义与手册**——按 `digital-employee.md`，交付一个系统要配
+      「数字员工 agent + 操作 CLI + 手册」。CLI（`cli.py`）已就位，agent 定义未写
 - [ ] 英文 README
 - [ ] CI
 

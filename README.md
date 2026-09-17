@@ -87,6 +87,36 @@ if not decision.allowed:
 python examples/demo.py
 ```
 
+## 命令行（人类侧）
+
+非技术用户不用写 Python：
+
+```bash
+resident-authz status                       # 一条命令看清健康
+resident-authz check                        # 自证可用（临时目录跑完整生命周期，不碰真实数据）
+resident-authz issue --issuer 张三 --subject key-pool-operator \
+    --actions add-alias,set-strategy --resources api-key-pool --hours 24
+resident-authz list --all
+resident-authz audit --event denied         # 只看被拒的
+resident-authz verify-chain                 # 审计链被改过会报错并指出第几条
+resident-authz revoke <编号> --yes          # 高风险
+```
+
+**分级由代码强制**，不靠使用者自觉：
+
+| 级别 | 命令 | 闸门 |
+|---|---|---|
+| 只读 | `status` `list` `audit` `verify-chain` `check` | 直接可用 |
+| 低风险写 | `issue` | 自动备份后执行（备份落 `<base>/backups/`） |
+| **高风险写** | `revoke` | **必须 `--yes`**，否则**退出码 2** 并打印确认提示 |
+
+退出码：`0` 成功 / `1` 出错 / **`2` 拒绝执行**（未取得人类确认）。
+**与"出错"分开**，调用方（包括 AI）能据此区分"你没被授权"和"命令写错了"。
+
+> 真跑过的验收（2026-09-17）：
+> `revoke` 不带 `--yes` → 退出码 2，且**档案一个字节都没动**（仍显示"有效"）；
+> 带 `--yes` → 撤销成功并留下备份；`verify-chain` 在审计被事后篡改时报错。
+
 ## 它拦住什么（真跑过的验收单）
 
 | 场景 | 结论 |
