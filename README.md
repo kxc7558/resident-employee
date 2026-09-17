@@ -117,6 +117,53 @@ resident-authz revoke <编号> --yes          # 高风险
 > `revoke` 不带 `--yes` → 退出码 2，且**档案一个字节都没动**（仍显示"有效"）；
 > 带 `--yes` → 撤销成功并留下备份；`verify-chain` 在审计被事后篡改时报错。
 
+## 常驻运行时（v0.1）
+
+CLI 是员工的「手」，运行时是「人」——一个常驻进程，带着**专属系统提示 + 跨会话记忆 + 每次动作前的闸门**。
+
+```python
+from resident_employee.runtime import Employee, EmployeeRunner
+from resident_employee.runtime.adapters.claude_agent_sdk import ClaudeAgentSDKEngine
+
+employee = Employee.from_file("examples/employee.example.json").validate()
+runner = EmployeeRunner(
+    employee, ClaudeAgentSDKEngine(),
+    allowed_tools=("Read", "Bash"), max_steps=20, audit=audit_chain,
+)
+result = await runner.run_turn("看看系统健康", on_event=print_event)   # on_event = 过程可见
+```
+
+员工定义就是规范要求的**六段式**（我管的系统 / 常用动作 / 权限边界 / 这个系统的坑 / 排障顺序 / 输出要求），
+缺一段直接报错——不给"凑合能用"的机会。另有一段**通用铁律**由运行时写死注入（不猜接口、做完验证、
+别人数据只读、不许绕过闸门……），免得每个员工定义抄一遍还抄漏。
+
+**闸门**（对应故障预案，逐条落地）：
+
+| 故障 | 闸门 | 内建还是自建 |
+|---|---|---|
+| 选错工具 | 工具面收窄——只发它该有的那几把 | 自建（薄薄一层） |
+| 参数构造出错 | 必填 / 禁用参数 | 自建 |
+| **调用循环** | 同工具同参数的指纹计数 | **必须自建——官方没有** |
+| 越权动作 | 接 `authz`，拒绝理由回灌给模型 | 自建 |
+| 步数失控 | `max_steps` → SDK `max_turns` | 内建 |
+| 花费失控 | `max_cost_usd` → SDK `max_budget_usd` | 内建 |
+| 卡死 | 超时 | 自建（官方无内建超时） |
+
+**引擎搁在接口后面**（`ports.AgentEngine`）。运行时核心不认识任何 SDK，因此：
+
+- 自己的逻辑（闸门、循环检测、成本、审计、事件流）**用假引擎全量测** —— 不花钱、不起进程、不依赖网络
+- 换引擎只改 `adapters/` 里一个文件
+
+跑看看：
+
+```bash
+python examples/demo_employee.py --fake           # 离线，不联网不花钱，看运行时自己的行为
+python examples/demo_employee.py "看看系统健康"    # 真引擎（会真起进程、真花 token）
+```
+
+`--fake` 那次会演一遍「正常读 → 越权写被拦 → 汇报」，并在结尾打出**审计哈希链**——
+每一次放行和拒绝都在链上。
+
 ## 它拦住什么（真跑过的验收单）
 
 | 场景 | 结论 |
@@ -165,9 +212,9 @@ resident-authz revoke <编号> --yes          # 高风险
 | 部件 | 管什么 | 状态 |
 |---|---|---|
 | [`sql-guard`](https://github.com/kxc7558/sql-guard) | **能看见什么**（数据可见范围） | ✅ 已发布，独立安装 |
-| **`authz`**（本仓库） | **能做什么**（授权 + 审计） | ✅ v0.1，46 用例 / 93% 覆盖 |
-| 常驻员工运行时 | 从 Claude Code 派生常驻进程驻场 | ⬜ 未开始 |
-| 网页前台 | 照 ChatGPT 那一档做，过程可见 | ⬜ 未开始 |
+| **`authz`**（本仓库） | **能做什么**（授权 + 审计） | ✅ v0.1 |
+| **运行时**（本仓库） | 把员工跑起来（闸门 + 事件流 + 审计） | ✅ v0.1，147 用例 / 94% 覆盖 |
+| 网页前台 | 照 ChatGPT 那一档做，过程可见 | ⬜ 未开始（事件流已备好，接上即可） |
 
 ## 边界（别误会）
 

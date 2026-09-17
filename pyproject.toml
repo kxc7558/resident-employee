@@ -17,6 +17,8 @@ resident-authz = "resident_employee.authz.cli:main"
 [project.optional-dependencies]
 # ② 档（一次性授权码 + 审计哈希链）零依赖；③ 档签名才需要密码学库
 signed = ["cryptography>=41"]
+# 常驻运行时需要 agent 引擎；只用授权/审计部件不需要
+engine = ["claude-agent-sdk>=0.2"]
 dev = ["pytest>=7", "pytest-cov"]
 
 [tool.setuptools.packages.find]
