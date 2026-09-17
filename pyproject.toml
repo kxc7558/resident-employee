@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "resident-employee"
+version = "0.1.0"
+description = "给业务系统配常驻 AI 员工的框架：授权（人类持私钥签发、AI 只持公钥）+ 审计哈希链"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+# ② 档（一次性授权码 + 审计哈希链）零依赖；③ 档签名才需要密码学库
+signed = ["cryptography>=41"]
+dev = ["pytest>=7", "pytest-cov"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q"

@@ -1,0 +1,159 @@
+# resident-employee
+
+> 给业务系统配**常驻 AI 员工**的框架。本仓库是其中负责「**AI 能做什么**」的部件：授权与审计。
+>
+> An open framework for resident AI employees in business systems — this repo is the
+> authorization & audit half: humans sign, agents verify, nothing is self-granted.
+
+**一句话核心**：`--yes` 是**约定**（AI 自己就能把参数加上），签名是**物理**（AI 没有私钥，数学上造不出）。
+
+---
+
+## 它解决什么
+
+给 AI 员工放权，绕不开一个问题：**闸门凭什么拦得住它？**
+
+绝大多数做法是「在代码里检查一个标志位」——比如要求命令带 `--yes`。问题是：**AI 完全可以自己把 `--yes` 加上**。拦住它的不是代码，是它守规矩。这不是安全，是礼貌。
+
+本部件把闸门换成两种**它绕不过去**的东西：
+
+| 档 | 机制 | AI 读到凭据会怎样 | 需要服务端存档 |
+|---|---|---|---|
+| **② 一次性授权码 + 审计哈希链** | 执行器持码，每次使用消耗一次 | **能自己把闸门打开** —— 所以码必须放在 AI 读不到的地方 | 要 |
+| **③ 人类私钥签名的令牌** | Ed25519 验签 | **读到了也造不出签名** | 不要，有公钥就能验 |
+
+**「读得到就能用」 vs 「读得到也造不出」——这就是 ②→③ 的全部意义。**
+
+规范建议**从 ② 起步**（零依赖、内部够用），要「对外举证 / 不可抵赖」再上 ③。**②→③ 架构不用改**，把授权码换成签名令牌即可。
+
+## 授权书必须写清六样
+
+| 字段 | 含义 | 缺了会怎样 |
+|---|---|---|
+| 谁签的 | 人类身份 | 出了事无法追责 |
+| 给谁 | 员工／AI 身份 | 别人捡到就能用 |
+| 做什么 | 动作白名单 | 权限无限大 |
+| 对什么 | 资源白名单 | 越权 |
+| 到什么时候 | 有效期 | 永久有效 |
+| 多少次 | 次数上限 | 一次授权刷到底 |
+
+**缺一个就是不合格设计**——`Grant.validate()` 会直接抛 `GrantError`，不给"凑合能用"的机会。
+
+## 快速开始
+
+```bash
+pip install -e .                 # ② 档：零依赖
+pip install -e ".[signed]"       # ③ 档才需要 cryptography
+```
+
+人类侧签发：
+
+```python
+from resident_employee.authz import AuditChain, Grant, GrantStore, in_hours, now_utc
+
+audit = AuditChain("data/audit.jsonl")
+store = GrantStore("data/grants.json", audit)
+
+grant = Grant(
+    issuer="张三",                    # 谁签的
+    subject="key-pool-operator",      # 给谁
+    actions=("add-alias", "set-strategy"),   # 做什么
+    resources=("api-key-pool",),             # 对什么
+    issued_at=now_utc(),
+    expires_at=in_hours(24),
+    max_uses=None,                    # 有效期内次数不限（低风险档：一天签一次）
+)
+record, code = store.issue(grant)
+print(code)      # ← 明文码只在这一刻出现，档案里只存哈希
+```
+
+执行器侧校验：
+
+```python
+from resident_employee.authz import authorize
+
+decision = authorize(
+    store, grant_id=record.grant.grant_id,
+    action="add-alias", resource="api-key-pool",
+    code=code,          # ← 码由执行器持有，AI 不持有
+)
+if not decision.allowed:
+    raise PermissionError(decision.brief())
+```
+
+跑一遍看效果（含签名档与篡改检测）：
+
+```bash
+python examples/demo.py
+```
+
+## 它拦住什么（真跑过的验收单）
+
+| 场景 | 结论 |
+|---|---|
+| 授权码不对 | `BAD_CODE` |
+| 授权过期 | `EXPIRED` |
+| 已撤销 | `REVOKED` |
+| 一次性令牌用第二次 | `EXHAUSTED` |
+| 动作不在白名单 | `ACTION_NOT_ALLOWED` |
+| 资源不在白名单 | `RESOURCE_NOT_ALLOWED` |
+| 令牌被改一个字符 | `BAD_CODE`（签名验不过） |
+| 用别人的私钥签 | `BAD_CODE` |
+| 审计记录被事后修改 | 哈希链校验**报错并指出第几条** |
+| 审计记录被抽掉一条 | 哈希链校验报错 |
+
+**被拒的也记审计**——只记成功的审计是没用的，想知道「谁试过碰不该碰的」恰恰要记被拒的那些。
+
+## 三个补丁一个都不能少
+
+签名令牌**天生不可撤销**——签出去就在有效期内一直有效。少任何一个补丁，这套就是纸门：
+
+1. **短有效期**（`expires_at` 本身就短）
+2. **撤销名单**（执行前查一次，`verify_signed(revoked_ids=...)`）
+3. **高风险用一次性**（`max_uses=1` + nonce 记录，`used_nonces=...`）
+
+> 第 3 条有个必须说清的地方：签名令牌是**自带的凭据**，「用过几次」这个状态**没地方存**。
+> 所以 `max_uses > 1` 的签名令牌本库**明确拒绝**（而不是假装支持）——
+> 要用多次就签 `max_uses=None` 的长期令牌，或走 ② 档（次数由执行器记）。
+> **无状态的凭据 + 有状态的防重放**，这是自带凭据的必然代价。
+
+## 私钥放哪
+
+丢了 = 权限体系崩；被偷 = 别人以你的名义授权，**比密码泄露严重一个量级**。
+
+| 方案 | 强度 | 适合 |
+|---|---|---|
+| 硬件密钥 | 最高 | 长期、正式场景 |
+| 系统钥匙串 / TPM | 中高 | 本机自用 |
+| 手机 App + 指纹/人脸 | 中高、最易用 | **非技术用户，推荐** |
+
+**绝不允许**：明文私钥文件放在项目目录、提交进 git、跟着 `.env` 走。
+最不该做的就是把它存成一个文件放在代码旁边——那样等于没签。
+
+## 框架地图
+
+| 部件 | 管什么 | 状态 |
+|---|---|---|
+| [`sql-guard`](https://github.com/kxc7558/sql-guard) | **能看见什么**（数据可见范围） | ✅ 已发布，独立安装 |
+| **`authz`**（本仓库） | **能做什么**（授权 + 审计） | ✅ v0.1，46 用例 / 93% 覆盖 |
+| 常驻员工运行时 | 从 Claude Code 派生常驻进程驻场 | ⬜ 未开始 |
+| 网页前台 | 照 ChatGPT 那一档做，过程可见 | ⬜ 未开始 |
+
+## 边界（别误会）
+
+- **它不是执行器。** 本库只判「这次操作有没有被授权」，不执行操作。执行是调用方的事。
+- **② 档的强度取决于码放哪。** 码和执行者在同一侧，AI 若能读到配置里的码就等于没闸门。**闸门的钥匙不能挂在门上。** 要连执行器也信不过，就上 ③。
+- **审计哈希链防的是「事后篡改」，不是「事前伪造」。** 有写权限的人可以整条链重算——要防这个，得把链尾哈希定期对外公布或签名。
+- **不做密钥管理。** 本库给 `generate_keypair()`，但私钥存哪是你的事（见上）。
+
+## 开发
+
+```bash
+pip install -e ".[dev]"
+python -m pytest --cov=resident_employee    # 46 用例，覆盖率须 ≥80%
+python examples/demo.py
+```
+
+## License
+
+MIT — 见 [LICENSE](LICENSE)。
