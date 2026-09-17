@@ -25,7 +25,7 @@ dev = ["pytest>=7", "pytest-cov"]
 where = ["src"]
 
 [tool.setuptools.package-data]
-"resident_employee.web" = ["static/*.html"]
+"resident_employee.web" = ["static/*.html", "static/*.js"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

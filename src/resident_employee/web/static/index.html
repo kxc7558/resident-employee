@@ -537,6 +537,19 @@ async function saveConfig() {
   refreshStatus();
 }
 
+/* ---------- 嵌进宿主时的自适应高度 ----------
+   对话台是嵌在业务系统页面里的，宿主不知道我们多高。
+   量出来报给宿主（embed.js 那边收），否则要么留一片空白、要么把内容截掉。 */
+
+function reportHeight() {
+  if (window.parent === window) return;   // 独立打开就不报
+  const h = Math.max(
+    document.body.scrollHeight,
+    document.documentElement.scrollHeight
+  );
+  window.parent.postMessage({ type: 're-height', height: h }, '*');
+}
+
 /* ---------- 主题 ---------- */
 
 function applyTheme(t) {
@@ -559,6 +572,13 @@ $('prompt').addEventListener('keydown', (e) => {
 });
 
 applyTheme(localStorage.getItem('re-theme') || 'light');
+
+// 嵌进宿主时：内容一变就报高度，别让对话台被 iframe 截掉
+new MutationObserver(reportHeight).observe($('feed'), { childList: true, subtree: true });
+window.addEventListener('load', reportHeight);
+setTimeout(reportHeight, 300);
+window.addEventListener('resize', reportHeight);
+
 refreshAll().then(() => {
   if (state.sessions.length) openSession(state.sessions[0].session_id);
   else $('prompt').focus();

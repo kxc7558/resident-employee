@@ -166,6 +166,12 @@ python examples/demo_employee.py "看看系统健康"    # 真引擎（会真起
 
 ## 网页前台
 
+> **定位：嵌在业务系统内部的对话台，不是独立站点。**
+
+这条定位决定了好几件事：用户**已经登录了业务系统**，所以**认证归宿主系统**——
+对话台不该再要一次登录，它接受宿主传来的共享令牌，而不是自己造一套账号体系。
+也因此，**服务端只绑本机／内网**：它本来就是宿主的一部分。
+
 ```bash
 python -m resident_employee.web --trial-engine --data web-demo
 # 然后开 http://127.0.0.1:8765/
@@ -175,7 +181,47 @@ python -m resident_employee.web --trial-engine --data web-demo
 看到事件流、过程可见、被拦、确认执行这一整套。去掉它就是真引擎。
 
 前台是**单文件 HTML + 内联 CSS/JS + 零外部依赖**；服务端**只用标准库**（`http.server`），
-所以前台不引入任何额外依赖。默认**只绑 127.0.0.1**——这是本机工具，要对外必须先加认证。
+所以前台不引入任何额外依赖。
+
+### 嵌进业务系统
+
+宿主页面加一行：
+
+```html
+<script src="http://127.0.0.1:8765/embed.js"
+        data-token="宿主给对话台的共享令牌"
+        data-target="#employee-panel"></script>
+```
+
+`embed.js` 会在 `#employee-panel` 里挂一个对话台，并**自适应高度**（通过 postMessage 汇报内容高度）。
+用 iframe 而不是直接注入脚本，是为了一件事：**样式隔离**——宿主系统三千行的 CSS
+和对话台的样式互不污染。代价是首屏多一次加载，换取的是两边都省心。
+
+### 认证归宿主系统
+
+| 情形 | 行为 |
+|---|---|
+| 没配 `host_token`（独立模式） | **只接受来自本机的请求**。别人从局域网也连不上 |
+| 配了 `host_token` | 所有 `/api/*` 请求必须带令牌（`X-Employee-Token` 头，或首次用 `?token=` 换来的 HttpOnly cookie） |
+
+首次带 `?token=` 访问页面时，服务端校验后**下发一个 HttpOnly cookie**（值是令牌的哈希，
+不是令牌本身），之后 iframe 内的所有请求都靠它——这样令牌不必出现在每个 URL 里。
+
+**令牌从不回传**：`GET /api/config` 只说 `has_token`，不说是多少——它会进浏览器、进缓存、进截图。
+
+### 常驻托管
+
+```bash
+python -m resident_employee.web --check --data web-data    # 一条命令查在岗/离岗（不起服务、不起 agent）
+python -m resident_employee.web --write-boot               # 生成开机自启（Windows .bat / Linux systemd）
+```
+
+「在岗」的判据是**状态文件够新 **且** 那个 pid 还活着**，缺一不可。
+只看文件的话，进程被强杀留下的**陈旧文件会一直显示"在岗"**——那比没有状态更糟，
+因为它会让你以为没事。三种离岗要分清：没起过 / 进程不在了 / 进程在但 90 秒没动静（疑似卡住）。
+
+生成的 `.bat` 是 **GBK + CRLF**：用 UTF-8 存，cmd 会按 GBK 解，中文乱码、严重时首字节被吃掉，
+报「'ho' 不是内部或外部命令」。
 
 规范里那条「员工不能隐形」要求的三样，一个不缺：
 
@@ -267,6 +313,19 @@ pip install -e ".[dev]"
 python -m pytest --cov=resident_employee    # 46 用例，覆盖率须 ≥80%
 python examples/demo.py
 ```
+
+## 三件套
+
+按规范，交付一个系统要配「**数字员工 agent + 操作 CLI + 手册**」，缺一不算交付：
+
+| 件 | 位置 | 作用 |
+|---|---|---|
+| **agent**（脑） | `.claude/agents/resident-employee-operator.md` | 带着这套系统全部知识上任：六段齐全 + 12 条实测坑 + 排障顺序 |
+| **CLI**（手） | `resident-authz` + `python -m resident_employee.web` | 分级授权由代码强制（`revoke` 不带 `--yes` 直接拒） |
+| **手册**（底） | `README.md`（给人）+ `CLAUDE.md`（给 AI） | 改系统时必须同步改 agent，否则员工拿过期知识干错事 |
+
+> agent 要**另存一份到 `~/.claude/agents/`** 才实际生效（Claude Code 只在当前工作目录下加载项目级 agent，
+> 而实际使用时常在 `d:\` 等上级目录跨项目工作）。
 
 ## License
 

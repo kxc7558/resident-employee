@@ -15,6 +15,7 @@ from ..authz import AuditChain, GrantStore
 from ..runtime import Employee, EmployeeRunner, build_default_chain
 from .approvals import ApprovalBook, blocked_hard, confirmable_actions
 from .config import AppConfig
+from .heartbeat import HEARTBEAT_FILE, Heartbeat, check_health
 from .sessions import ROLE_EMPLOYEE, Session, SessionStore
 
 
@@ -38,6 +39,7 @@ class EmployeeApp:
         self.approvals = ApprovalBook(
             self.grants, self.audit, resource=self.config.resource
         )
+        self.heartbeat = Heartbeat(self.data_dir / HEARTBEAT_FILE)
         self._lock = threading.Lock()
 
     # --- 员工与运行器 -----------------------------------------------------
@@ -81,6 +83,7 @@ class EmployeeApp:
 
     def status(self) -> dict[str, Any]:
         chain_ok, chain_note = self.audit.verify()
+        health = check_health(self.data_dir / HEARTBEAT_FILE)
         try:
             employee_name = self.employee().name
         except FileNotFoundError:
@@ -92,6 +95,8 @@ class EmployeeApp:
             "audit_entries": len(self.audit),
             "chain_ok": chain_ok,
             "chain_note": chain_note,
+            "alive": health.alive,
+            "uptime_s": round(health.uptime_s, 1),
             "config": self.config.to_public_dict(),
         }
 

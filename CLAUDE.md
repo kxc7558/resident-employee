@@ -33,10 +33,15 @@ src/resident_employee/
 └── web/                 网页前台（把员工摆到人面前）
     ├── sessions.py      多会话 + 消息 + 过程记录（落 JSON）
     ├── approvals.py     审批簿：确认执行 = 签一张一次性授权
-    ├── server.py        HTTP API + NDJSON 流式（**只用标准库**）
-    ├── __main__.py      启动入口（含 --trial-engine 试用引擎）
-    └── static/index.html  单文件前台（内联 CSS/JS，零外部依赖）
-tests/          181 用例，覆盖率 90%+
+    ├── auth.py          **认证归宿主系统**：独立模式只认本机；配了就认宿主令牌
+    ├── heartbeat.py     心跳与在岗状态（一条命令查健康，不起 agent）
+    ├── config.py        配置（模型后端/工具面/host_token）
+    ├── app.py           应用对象（员工、会话、审计、授权、心跳）
+    ├── server.py        HTTP 路由 + NDJSON 流式（**只用标准库**）
+    ├── __main__.py      入口（--trial-engine / --check / --write-boot）
+    └── static/          index.html（单文件前台）+ embed.js（宿主页面引它）
+.claude/agents/         三件套的 agent（另存 ~/.claude/agents/ 才实际生效）
+tests/          265 用例，覆盖率 90%+
 examples/       demo.py（库）/ demo_employee.py（运行时）/ employee.example.json（六段实写）
 verify_sdk.py   引擎可行性实测（两关，看最后一行）
 ```
@@ -60,6 +65,14 @@ verify_sdk.py   引擎可行性实测（两关，看最后一行）
 11. **令牌绝不回传前台**。`GET /api/config` 只说 `has_token`，不说是多少——它会进浏览器、进缓存、进截图。
 12. **批准只认记录里真的被拦过的动作**。不能"客户端说批什么就批什么"，否则任何本机页面
     都能给自己签一个从没被拦过的动作。
+13. **认证归宿主系统**。对话台是嵌进业务系统的，用户已经登录过了——**不自己造账号体系**。
+    独立模式只认本机；配了 `host_token` 就**连本机也要带令牌**（不给"本机免检"留口子）。
+14. **宿主令牌必须是 ASCII**。HTTP 头的值只能走 latin-1，中文令牌根本发不出去；
+    **在配置层拦住它**，别让它到请求层神秘失败。
+15. **"在岗"要两个判据**：状态文件够新 **且** pid 还活着。只看文件的话，进程被强杀留下的
+    陈旧文件会一直显示"在岗"——那比没有状态更糟，因为它让你以为没事。
+16. **`hmac.compare_digest` 比的是字节**，不是字符串。对 str 它要求两边纯 ASCII，
+    一个中文字就抛 `TypeError`（变成 500 而不是干净的 401）。
 
 ## 关键坑（都真踩过 / 已用测试固化）
 
@@ -94,15 +107,13 @@ cd d:/resident-employee && python verify_sdk.py
 
 ## 已知缺口
 
-- [ ] 常驻进程的托管（开机自启 / systemd / 失联上报——目前只有库，没有守护进程）
-- [ ] 前台要对外必须加认证（现在默认只绑 127.0.0.1，没有登录态）
+- [ ] 前台的原生注入（现在是 iframe；宿主页面想要"无缝"效果就得把前台拆成可注入组件）
 - [ ] 员工定义支持 markdown（现在只吃 JSON；规范里的 `.claude/agents/*.md` 六段格式要能直接读）
 - [ ] 授权档案的 SQLite 后端（当前 JSON，量大后要换）
 - [ ] 附件上传、历史搜索（规范里列了，还没做）
-- [ ] **三件套缺 agent 定义与手册**——按 `digital-employee.md`，交付一个系统要配
-      「数字员工 agent + 操作 CLI + 手册」。CLI（`cli.py`）已就位，agent 定义未写
 - [ ] 英文 README
 - [ ] CI
+- [ ] 本地目录 `d:\digital-employee` 改名（旧账，与 `d:\sql-guard` 那次同因：Windows 句柄占用）
 
 ## 相关规范
 

@@ -32,17 +32,36 @@ class AppConfig:
     resource: str = "employee"
     """授权书里"对什么"那一栏的值。"""
 
+    host_token: str = ""
+    """宿主系统给对话台的共享令牌。
+
+    **空 = 独立模式**（只接受本机访问）。非空则所有 `/api/*` 都要带它。
+    认证归宿主系统——我们不自己造账号体系，见 `auth.py`。
+
+    **必须是 ASCII**：HTTP 头的值只能走 latin-1，中文令牌根本发不出去。
+    这不是洁癖——不在配置层拦住，它就会到 HTTP 层神秘失败，排查起来很费劲。
+    """
+
     def to_public_dict(self) -> dict[str, Any]:
         """给前台的版本——**token 只说有没有，不说是多少**。"""
         data = asdict(self)
         data.pop("token", None)
+        data.pop("host_token", None)
         data["has_token"] = bool(self.token)
+        data["has_host_token"] = bool(self.host_token)
         data["allowed_tools"] = list(self.allowed_tools)
         return data
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "AppConfig":
         tools = data.get("allowed_tools")
+        host_token = str(data.get("host_token", ""))
+        if host_token and not host_token.isascii():
+            raise ValueError(
+                "宿主令牌必须是 ASCII（字母、数字、符号）。"
+                "HTTP 头的值只能走 latin-1，中文令牌发不出去——"
+                "与其到请求层神秘失败，不如在这里就说清楚。"
+            )
         return cls(
             employee_file=str(data.get("employee_file", "examples/employee.example.json")),
             base_url=str(data.get("base_url", "")),
@@ -52,6 +71,7 @@ class AppConfig:
             max_steps=int(data.get("max_steps", 20)),
             timeout_s=float(data.get("timeout_s", 180.0)),
             resource=str(data.get("resource", "employee")),
+            host_token=host_token,
         )
 
     @classmethod
